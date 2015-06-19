@@ -15,7 +15,10 @@ import           Control.Monad.State (get, gets)
 import           Control.Lens
 import           Data.Maybe
 import           Data.ByteString (ByteString)
+import           Data.ByteString as B
 import qualified Data.Text as T
+import           Data.Text.Encoding (decodeUtf8)
+import           Data.Time.Clock (getCurrentTime)
 import           Snap.Core
 import           Snap.Snaplet
 import           Snap.Snaplet.Auth
@@ -25,6 +28,7 @@ import           Snap.Snaplet.Session.Backends.CookieSession
 import           Snap.Util.FileServe
 import           Heist
 import qualified Heist.Interpreted as I
+import qualified Text.XmlHtml as X
 ------------------------------------------------------------------------------
 import           Application
 
@@ -62,23 +66,48 @@ handleNewUser = method GET handleForm <|> method POST handleFormSubmit
     handleForm = render "new_user"
     handleFormSubmit = registerUser "login" "password" >> redirect "/"
 
-handleTest :: Handler b App ()
-handleTest = method GET test
+testPost = 
+  [  ("url 1", "this is body")
+  , ("url 2", "this is it's body")
+  ]
+
+handleSearch :: Handler App App ()
+handleSearch = method GET showQuery <|> method POST handleQuery
   where
-    test = do
-      s <- getSnapletState
-      let value = s ^. snapletValue
-      writeText  . T.pack $ _appName value
+    showQuery = do
+      query <- getQueryParam "query"
+      liftIO $ print query
+      renderWithSplices "search_result" $ searchResultSplice
+    handleQuery = do
+      mquery <- getParam "query"
+      liftIO $ print mquery
+      case mquery of
+        Just query -> do 
+          let redirectUrl = B.concat [searchUrl, "?query=", query]
+          redirect redirectUrl
+        Nothing -> redirect "/"
+
+searchResultSplice :: Splices (SnapletISplice App)
+searchResultSplice = "searchResult" ## (renderPosts testPost)
+
+renderPosts :: [(T.Text, T.Text)] -> SnapletISplice App
+renderPosts = I.mapSplices $ I.runChildrenWith . postSplices
+
+postSplices :: Monad n => (T.Text, T.Text) -> Splices (I.Splice n)
+postSplices (url, body) = do
+  "postUrl" ## I.textSplice url
+  "postBody" ## I.textSplice body
 
 ------------------------------------------------------------------------------
 -- | The application's routes.
+searchUrl = "/search"
+
 routes :: [(ByteString, Handler App App ())]
 routes = [ ("/login",    with auth handleLoginSubmit)
          , ("/logout",   with auth handleLogout)
+         , (searchUrl,   handleSearch)
          , ("",          serveDirectory "static")
-         , ("/testing",  handleTest)
          ]
-
 
 ------------------------------------------------------------------------------
 -- | The application initializer.
@@ -93,7 +122,10 @@ app = makeSnaplet "app" "An snaplet example application." Nothing $ do
     -- you'll probably want to change this to a more robust auth backend.
     a <- nestSnaplet "auth" auth $
            initJsonFileAuthManager defAuthSettings sess "users.json"
+    modifyHeistState $ I.bindSplices $ do
+      "searchUrl" ## I.textSplice (decodeUtf8 searchUrl)
     addRoutes routes
     addAuthSplices h auth
+
     return $ App h s a "This is spartan"
 

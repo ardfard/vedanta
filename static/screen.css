@@ -24,3 +24,35 @@ img {
 #info {
    font-size: 60%;
 }
+
+div {
+   display: block;
+}
+div#searchform {
+   min-width: 980px;
+   z-index: 103;
+   width: 100%;
+   position: relative;
+   padding-top: 30px;
+}
+
+#logo {
+   left:0;
+   top:0;
+   position: absolute;
+}
+
+#sg {
+   padding-bottom: 2px;
+   padding-top: 3px;
+   position: relative;
+   line-height: 0;
+   overflow: visible;
+}
+
+#logout {
+   float: right;
+   justify-content: flex-end;
+   padding-right: 30px;
+   position: relative;
+}
